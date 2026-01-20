@@ -130,3 +130,4 @@ if __name__ == "__main__":
         else:
             print(f"Market is closed at {datetime.now().time()}. Waiting to open...")
             t.sleep(300)  # check every 5 minutes until market opens
+        # test commit
