@@ -1,25 +1,24 @@
 # =============================
-# Imports
+# stock.py
 # =============================
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockQuotesRequest
-from datetime import datetime, time
-import time as t
+import os
 
 # =============================
-# Alpaca API keys (Paper Trading)
+# Alpaca API keys from environment
 # =============================
-API_KEY = "PKSIVZHEUMOCR4KHFTUYIWDYMH"
-API_SECRET = "2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG"
+API_KEY = os.getenv("PKSIVZHEUMOCR4KHFTUYIWDYMH")
+API_SECRET = os.getenv("2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG")
 
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
 data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 # =============================
-# BST Node Class
+# BST Node class
 # =============================
 class Node:
     def __init__(self, stock_symbol):
@@ -32,12 +31,11 @@ class Node:
         self.right = None
 
 # =============================
-# Insert trade (BST)
+# Insert stock into BST
 # =============================
 def insert_trade(node, stock_symbol):
     if node is None:
         return Node(stock_symbol)
-
     if stock_symbol < node.stock_symbol:
         node.left = insert_trade(node.left, stock_symbol)
     else:
@@ -51,7 +49,6 @@ def fetch_current_prices(stocks):
     current_prices = {}
     request = StockQuotesRequest(symbol_or_symbols=stocks)
     quotes = data_client.get_stock_quotes(request)
-
     for symbol in stocks:
         current_prices[symbol] = quotes[symbol][-1].ask_price
     return current_prices
@@ -71,7 +68,7 @@ def buy_stock(symbol, qty):
     return qty
 
 # =============================
-# Check trades: buy / sell / hold
+# Check trades function
 # =============================
 def check_trades(node, current_prices, shares_to_buy):
     if node is None:
@@ -81,7 +78,7 @@ def check_trades(node, current_prices, shares_to_buy):
 
     current_price = current_prices[node.stock_symbol]
 
-    # Buy if we don't own it yet
+    # Buy if not held yet
     if node.shares_held == 0:
         node.shares_held = buy_stock(node.stock_symbol, shares_to_buy)
         node.buy_price = current_price
@@ -118,35 +115,22 @@ def check_trades(node, current_prices, shares_to_buy):
     check_trades(node.right, current_prices, shares_to_buy)
 
 # =============================
-# Main Program
+# Main execution
 # =============================
 if __name__ == "__main__":
-    # Market hours (EST)
-    market_open = time(9, 30)
-    market_close = time(16, 0)
-
-    # Initialize BST with the three stocks
     root = None
     root = insert_trade(root, "GOOGL")
     root = insert_trade(root, "AAPL")
     root = insert_trade(root, "AMZN")
 
     stocks = ["GOOGL", "AAPL", "AMZN"]
-    shares_to_buy = 10  # Buy 10 shares of each stock
+    shares_to_buy = 10
 
-    print("Starting automated paper trading bot with real-time buying...")
+    print("Running Stock Bot once for GitHub Actions...")
+    try:
+        current_prices = fetch_current_prices(stocks)
+        check_trades(root, current_prices, shares_to_buy)
+    except Exception as e:
+        print(f"Error running bot: {e}")
 
-    while True:
-        now = datetime.now().time()
-        if market_open <= now <= market_close:
-            print(f"\nChecking trades at {datetime.now()}")
-            try:
-                current_prices = fetch_current_prices(stocks)
-                check_trades(root, current_prices, shares_to_buy)
-            except Exception as e:
-                print(f"Error fetching prices: {e}")
-            print("Sleeping until next hourly check...")
-            t.sleep(3600)  # hourly check
-        else:
-            print(f"Market is closed at {datetime.now().time()}. Waiting to open...")
-            t.sleep(300)  # check every 5 minutes until market opens
+    print("Stock Bot run complete. Exiting.")

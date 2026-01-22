@@ -2,9 +2,9 @@ name: Run Stock Trading Bot
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'  # 8 AM CST Monday-Friday
-    - cron: '0 21 * * 1-5'  # 3 PM CST Monday-Friday
-  workflow_dispatch:
+    - cron: '0 14 * * 1-5'  # 8 AM CST Mon-Fri
+    - cron: '0 21 * * 1-5'  # 3 PM CST Mon-Fri
+  workflow_dispatch:       # manual run
 
 jobs:
   run-bot:
@@ -28,5 +28,4 @@ jobs:
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
-        run: |
-          python stock.py
+        run: python stock.py
