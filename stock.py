@@ -15,15 +15,15 @@ API_KEY = os.getenv("PKSIVZHEUMOCR4KHFTUYIWDYMH")
 API_SECRET = os.getenv("2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG")
 
 print("DEBUG:")
-print("API key exists:", api_key is not None)
-print("Secret key exists:", secret_key is not None)
+print("API key exists:", API_KEY is not None)
+print("Secret key exists:", API_SECRET is not None)
 
-if not api_key or not secret_key:
+if not API_KEY or not API_SECRET:
     raise ValueError("ALPACA_API_KEY or ALPACA_SECRET_KEY not set!")
 
 from alpaca.trading.client import TradingClient
 
-trading_client = TradingClient(api_key, secret_key, paper=True)
+trading_client = TradingClient(API_SECRET, API_SECRET, paper=True)
 print("Alpaca client initialized")
 
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
