@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install alpaca-trade-api alpaca-py
+          pip install alpaca-trade-api alpaca-py pytz
 
       - name: Run Stock Bot
         env:
