@@ -8,9 +8,8 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockQuotesRequest
 import os
 
-# =============================
-# Alpaca API keys from environment
-# =============================
+print("ENV CHECK:", os.environ.keys())
+
 API_KEY = os.getenv("PKSIVZHEUMOCR4KHFTUYIWDYMH")
 API_SECRET = os.getenv("2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG")
 

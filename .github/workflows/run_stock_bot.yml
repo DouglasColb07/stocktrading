@@ -24,7 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install alpaca-trade-api alpaca-py pytz
 
-      - name: Run Stock Bot
+      - name: Run Stock Bot 
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
