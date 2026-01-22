@@ -27,7 +27,7 @@ trading_client = TradingClient(api_key, secret_key, paper=True)
 print("Alpaca client initialized")
 
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
+
 
 # =============================
 # BST Node class
