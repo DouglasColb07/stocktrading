@@ -1,0 +1,32 @@
+name: Run Stock Trading Bot
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'  # 8 AM CST Monday-Friday
+    - cron: '0 21 * * 1-5'  # 3 PM CST Monday-Friday
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install alpaca-trade-api alpaca-py
+
+      - name: Run Stock Bot
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: |
+          python stock.py

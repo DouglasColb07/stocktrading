@@ -7,7 +7,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockQuotesRequest
 from datetime import datetime, time
-import time as t  # for sleep
+import time as t
 
 # =============================
 # Alpaca API keys (Paper Trading)
@@ -22,51 +22,30 @@ data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 # BST Node Class
 # =============================
 class Node:
-    def __init__(self, stock_symbol, buy_price, stop_loss, take_profit):
+    def __init__(self, stock_symbol):
         self.stock_symbol = stock_symbol
-        self.buy_price = buy_price
-        self.stop_loss = stop_loss
-        self.take_profit = take_profit
+        self.buy_price = 0.0
+        self.stop_loss = 0.0
+        self.take_profit = 0.0
+        self.shares_held = 0
         self.left = None
         self.right = None
 
 # =============================
-# BST Insert Function (uses real-time price)
+# Insert trade (BST)
 # =============================
-def insert_trade(node, stock_symbol, stop_loss_pct, take_profit_pct):
-    # Fetch current price
-    request = StockQuotesRequest(symbol_or_symbols=[stock_symbol])
-    quote = data_client.get_stock_quotes(request)
-    buy_price = quote[stock_symbol][-1].ask_price
-
-    # Calculate stop-loss and take-profit based on percentage
-    stop_loss = buy_price * (1 - stop_loss_pct)
-    take_profit = buy_price * (1 + take_profit_pct)
-
+def insert_trade(node, stock_symbol):
     if node is None:
-        return Node(stock_symbol, buy_price, stop_loss, take_profit)
+        return Node(stock_symbol)
 
-    if buy_price < node.buy_price:
-        node.left = insert_trade(node.left, stock_symbol, stop_loss_pct, take_profit_pct)
+    if stock_symbol < node.stock_symbol:
+        node.left = insert_trade(node.left, stock_symbol)
     else:
-        node.right = insert_trade(node.right, stock_symbol, stop_loss_pct, take_profit_pct)
+        node.right = insert_trade(node.right, stock_symbol)
     return node
 
 # =============================
-# Submit Paper Order
-# =============================
-def submit_paper_order(symbol, side, qty):
-    order_data = MarketOrderRequest(
-        symbol=symbol,
-        qty=qty,
-        side=side,
-        time_in_force=TimeInForce.DAY
-    )
-    trading_client.submit_order(order_data)
-    print(f"Paper order submitted: {side} {qty} {symbol}")
-
-# =============================
-# Fetch Latest Real-Time Prices
+# Fetch current stock prices
 # =============================
 def fetch_current_prices(stocks):
     current_prices = {}
@@ -78,26 +57,65 @@ def fetch_current_prices(stocks):
     return current_prices
 
 # =============================
-# Check Trades Function
+# Buy shares function
 # =============================
-def check_trades(node, current_prices):
+def buy_stock(symbol, qty):
+    order_data = MarketOrderRequest(
+        symbol=symbol,
+        qty=qty,
+        side=OrderSide.BUY,
+        time_in_force=TimeInForce.DAY
+    )
+    trading_client.submit_order(order_data)
+    print(f"Paper BUY order submitted: {qty} shares of {symbol}")
+    return qty
+
+# =============================
+# Check trades: buy / sell / hold
+# =============================
+def check_trades(node, current_prices, shares_to_buy):
     if node is None:
         return
 
-    check_trades(node.left, current_prices)
+    check_trades(node.left, current_prices, shares_to_buy)
 
     current_price = current_prices[node.stock_symbol]
 
-    if current_price <= node.stop_loss:
+    # Buy if we don't own it yet
+    if node.shares_held == 0:
+        node.shares_held = buy_stock(node.stock_symbol, shares_to_buy)
+        node.buy_price = current_price
+        node.stop_loss = node.buy_price * 0.95
+        node.take_profit = node.buy_price * 1.10
+
+    # Check stop-loss
+    elif current_price <= node.stop_loss:
         print(f"STOP-LOSS triggered: SELL {node.stock_symbol} bought at {node.buy_price}, current price {current_price}")
-        submit_paper_order(node.stock_symbol, OrderSide.SELL, 1)
+        order_data = MarketOrderRequest(
+            symbol=node.stock_symbol,
+            qty=node.shares_held,
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.DAY
+        )
+        trading_client.submit_order(order_data)
+        node.shares_held = 0
+
+    # Check take-profit
     elif current_price >= node.take_profit:
         print(f"TAKE-PROFIT triggered: SELL {node.stock_symbol} bought at {node.buy_price}, current price {current_price}")
-        submit_paper_order(node.stock_symbol, OrderSide.SELL, 1)
-    else:
-        print(f"HOLD {node.stock_symbol} bought at {node.buy_price}, current price {current_price}")
+        order_data = MarketOrderRequest(
+            symbol=node.stock_symbol,
+            qty=node.shares_held,
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.DAY
+        )
+        trading_client.submit_order(order_data)
+        node.shares_held = 0
 
-    check_trades(node.right, current_prices)
+    else:
+        print(f"HOLD {node.stock_symbol}: bought at {node.buy_price}, current price {current_price}, shares held: {node.shares_held}")
+
+    check_trades(node.right, current_prices, shares_to_buy)
 
 # =============================
 # Main Program
@@ -107,15 +125,16 @@ if __name__ == "__main__":
     market_open = time(9, 30)
     market_close = time(16, 0)
 
-    # Initialize BST with real-time buy prices
+    # Initialize BST with the three stocks
     root = None
-    root = insert_trade(root, "GOOGL", stop_loss_pct=0.05, take_profit_pct=0.10)  # 5% SL, 10% TP
-    root = insert_trade(root, "AAPL", stop_loss_pct=0.05, take_profit_pct=0.10)
-    root = insert_trade(root, "AMZN", stop_loss_pct=0.05, take_profit_pct=0.10)
+    root = insert_trade(root, "GOOGL")
+    root = insert_trade(root, "AAPL")
+    root = insert_trade(root, "AMZN")
 
     stocks = ["GOOGL", "AAPL", "AMZN"]
+    shares_to_buy = 10  # Buy 10 shares of each stock
 
-    print("Starting automated paper trading script with real-time buy prices...")
+    print("Starting automated paper trading bot with real-time buying...")
 
     while True:
         now = datetime.now().time()
@@ -123,11 +142,11 @@ if __name__ == "__main__":
             print(f"\nChecking trades at {datetime.now()}")
             try:
                 current_prices = fetch_current_prices(stocks)
-                check_trades(root, current_prices)
+                check_trades(root, current_prices, shares_to_buy)
             except Exception as e:
                 print(f"Error fetching prices: {e}")
+            print("Sleeping until next hourly check...")
             t.sleep(3600)  # hourly check
         else:
             print(f"Market is closed at {datetime.now().time()}. Waiting to open...")
             t.sleep(300)  # check every 5 minutes until market opens
-        # test commit
