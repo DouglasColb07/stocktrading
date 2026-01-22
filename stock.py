@@ -14,6 +14,11 @@ import os
 API_KEY = os.getenv("PKSIVZHEUMOCR4KHFTUYIWDYMH")
 API_SECRET = os.getenv("2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG")
 
+if not API_KEY or not API_SECRET:
+    raise ValueError("ALPACA_API_KEY or ALPACA_SECRET_KEY not set!")
+
+print("API keys loaded successfully")
+
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
 data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
