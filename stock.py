@@ -1,15 +1,16 @@
 # =============================
 # stock.py
 # =============================
+import os
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockQuotesRequest
-import os
+from alpaca.data.historical import StockHistoricalDataClient
 
-print("ENV CHECK:", os.environ.keys())
-
+# =============================
+# Load API keys from GitHub secrets
+# =============================
 API_KEY = os.getenv("ALPACA_API_KEY")
 API_SECRET = os.getenv("ALPACA_SECRET_KEY")
 
@@ -20,13 +21,10 @@ print("Secret key exists:", API_SECRET is not None)
 if not API_KEY or not API_SECRET:
     raise ValueError("ALPACA_API_KEY or ALPACA_SECRET_KEY not set!")
 
-from alpaca.trading.client import TradingClient
-
-trading_client = TradingClient(API_SECRET, API_SECRET, paper=True)
-print("Alpaca client initialized")
-
+# =============================
+# Initialize trading client (paper account)
+# =============================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-
 
 # =============================
 # BST Node class
@@ -59,7 +57,7 @@ def insert_trade(node, stock_symbol):
 def fetch_current_prices(stocks):
     current_prices = {}
     request = StockQuotesRequest(symbol_or_symbols=stocks)
-    quotes = data_client.get_stock_quotes(request)
+    quotes = StockHistoricalDataClient(API_KEY, API_SECRET).get_stock_quotes(request)
     for symbol in stocks:
         current_prices[symbol] = quotes[symbol][-1].ask_price
     return current_prices
@@ -79,8 +77,10 @@ def buy_stock(symbol, qty):
     return qty
 
 # =============================
-# Check trades function
+# Check trades function with max shares limit
 # =============================
+MAX_SHARES = 80
+
 def check_trades(node, current_prices, shares_to_buy):
     if node is None:
         return
@@ -89,15 +89,17 @@ def check_trades(node, current_prices, shares_to_buy):
 
     current_price = current_prices[node.stock_symbol]
 
-    # Buy if not held yet
-    if node.shares_held == 0:
-        node.shares_held = buy_stock(node.stock_symbol, shares_to_buy)
-        node.buy_price = current_price
-        node.stop_loss = node.buy_price * 0.95
-        node.take_profit = node.buy_price * 1.10
+    # Buy more shares only if under MAX_SHARES
+    if node.shares_held < MAX_SHARES:
+        shares_to_add = min(shares_to_buy, MAX_SHARES - node.shares_held)
+        if shares_to_add > 0:
+            node.shares_held += buy_stock(node.stock_symbol, shares_to_add)
+            node.buy_price = current_price
+            node.stop_loss = node.buy_price * 0.95
+            node.take_profit = node.buy_price * 1.10
 
     # Check stop-loss
-    elif current_price <= node.stop_loss:
+    if node.shares_held > 0 and current_price <= node.stop_loss:
         print(f"STOP-LOSS triggered: SELL {node.stock_symbol} bought at {node.buy_price}, current price {current_price}")
         order_data = MarketOrderRequest(
             symbol=node.stock_symbol,
@@ -109,7 +111,7 @@ def check_trades(node, current_prices, shares_to_buy):
         node.shares_held = 0
 
     # Check take-profit
-    elif current_price >= node.take_profit:
+    elif node.shares_held > 0 and current_price >= node.take_profit:
         print(f"TAKE-PROFIT triggered: SELL {node.stock_symbol} bought at {node.buy_price}, current price {current_price}")
         order_data = MarketOrderRequest(
             symbol=node.stock_symbol,
@@ -135,7 +137,7 @@ if __name__ == "__main__":
     root = insert_trade(root, "AMZN")
 
     stocks = ["GOOGL", "AAPL", "AMZN"]
-    shares_to_buy = 50
+    shares_to_buy = 50  # number of shares to attempt buying per run
 
     print("Running Stock Bot once for GitHub Actions...")
     try:
