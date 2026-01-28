@@ -135,7 +135,7 @@ if __name__ == "__main__":
     root = insert_trade(root, "AMZN")
 
     stocks = ["GOOGL", "AAPL", "AMZN"]
-    shares_to_buy = 10
+    shares_to_buy = 50
 
     print("Running Stock Bot once for GitHub Actions...")
     try:
