@@ -10,8 +10,8 @@ import os
 
 print("ENV CHECK:", os.environ.keys())
 
-API_KEY = os.getenv("PKSIVZHEUMOCR4KHFTUYIWDYMH")
-API_SECRET = os.getenv("2D1eYP4xGmk89XgYGW4ZGnUJoBFeB2w4eZgNNgmprPAG")
+API_KEY = os.getenv("ALPACA_API_KEY")
+API_SECRET = os.getenv("ALPACA_SECRET_KEY")
 
 print("DEBUG:")
 print("API key exists:", API_KEY is not None)
