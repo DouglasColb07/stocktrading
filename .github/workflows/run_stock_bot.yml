@@ -1,21 +1,21 @@
 name: Stock Trading Bot
 
-# Run manually or on schedule
+# Trigger manually or on schedule
 on:
   workflow_dispatch:
   schedule:
-    # 10:30 AM EST / 3:30 PM UTC
-    - cron: '30 15 * * 1-5'  
-    # 3:00 PM EST / 20:00 UTC
-    - cron: '0 20 * * 1-5'    
+    # 10:30 AM EST / 15:30 UTC (1 hr after market open)
+    - cron: '30 15 * * 1-5'
+    # 3:00 PM EST / 20:00 UTC (1 hr before market close)
+    - cron: '0 20 * * 1-5'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
-      - name: Checkout Repository
+      # 1️⃣ Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       # 2️⃣ Set up Python
@@ -30,7 +30,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install alpaca-trade-api alpaca-py pytz
 
-      # 4️⃣ Run your stock bot
+      # 4️⃣ Run stock bot
       - name: Run Stock Bot
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}

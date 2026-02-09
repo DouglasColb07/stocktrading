@@ -79,7 +79,7 @@ def buy_stock(symbol, qty):
 # =============================
 # Check trades function with max shares limit
 # =============================
-MAX_SHARES = 80
+MAX_SHARES = 200
 
 def check_trades(node, current_prices, shares_to_buy):
     if node is None:
@@ -134,10 +134,10 @@ if __name__ == "__main__":
     root = None
     root = insert_trade(root, "GOOGL")
     root = insert_trade(root, "AAPL")
-    root = insert_trade(root, "AMZN")
+    root = insert_trade(root, "NVDA")
 
-    stocks = ["GOOGL", "AAPL", "AMZN"]
-    shares_to_buy = 50  # number of shares to attempt buying per run
+    stocks = ["GOOGL", "AAPL", "NVDA"]
+    shares_to_buy = 100  # number of shares to attempt buying per run
 
     print("Running Stock Bot once for GitHub Actions...")
     try:
