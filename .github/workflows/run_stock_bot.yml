@@ -1,30 +1,28 @@
-name: Stock Trading Bot
+name: Run Stock Bot Every 30 Minutes
 
 on:
-  workflow_dispatch:
   schedule:
-    # Every 30 minutes from 9:30 AM – 4:00 PM EST
-    # 9:30 AM EST = 14:30 UTC
-    # 4:00 PM EST = 21:00 UTC
-    - cron: '*/30 14-21 * * 1-5'
+    # Every 30 minutes during market hours (CST 9:30-16:00 → UTC 14:30-21:00)
+    - cron: '30 14-20/1 * * 1-5'   # Runs at HH:30 UTC from 14:30 to 20:30 UTC, Mon-Fri
+    - cron: '00 15-20/1 * * 1-5'   # Runs at HH:00 UTC from 15:00 to 20:00 UTC, Mon-Fri
+  workflow_dispatch:               # manual run if needed
 
 jobs:
-  run-bot:
+  run-stock-bot:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install alpaca-py pytz
+          pip install alpaca-trading alpaca-py
 
       - name: Run Stock Bot
         env:
