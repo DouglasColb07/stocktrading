@@ -3,27 +3,26 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockLatestTradeRequest
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
 
 # =====================
 # CONFIG
 # =====================
-STOCKS = ["NVDA", "MSFT", "GOOGL", "AAPL"]
-MAX_SHARES = 200          # Maximum per stock
-BUY_AMOUNT = 200           # How many shares you want to hold per stock
-STOP_LOSS_PCT = 0.07      # 7% stop loss
-TAKE_PROFIT_PCT = 0.10    # 10% take profit
-PAPER = True              # Paper trading
+STOCKS = ["NVDA", "GOOGL", "AAPL", "COST"]
+MAX_SHARES = 100
+BUY_AMOUNT = 100
+STOP_LOSS_PCT = 0.07
+TAKE_PROFIT_PCT = 0.10
+SHORT_MA = 5   # short-term moving average periods (5 bars)
+LONG_MA = 20   # long-term moving average periods (20 bars)
+PAPER = True
 
 # =====================
 # LOAD SECRETS
 # =====================
 API_KEY = os.getenv("ALPACA_API_KEY")
 API_SECRET = os.getenv("ALPACA_SECRET_KEY")
-
-print("DEBUG:")
-print("API key exists:", API_KEY is not None)
-print("Secret key exists:", API_SECRET is not None)
 
 if not API_KEY or not API_SECRET:
     raise ValueError("ALPACA_API_KEY or ALPACA_SECRET_KEY not set!")
@@ -33,75 +32,82 @@ if not API_KEY or not API_SECRET:
 # =====================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=PAPER)
 data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
-print("Alpaca clients initialized")
 
 # =====================
-# FETCH CURRENT PRICES
+# HELPER FUNCTIONS
 # =====================
-current_prices = {}
-for symbol in STOCKS:
-    trade_req = StockLatestTradeRequest(symbol_or_symbols=symbol)
-    latest_trade = data_client.get_stock_latest_trade(trade_req)[symbol]
-    current_prices[symbol] = float(latest_trade.price)
-    print(f"{symbol} current price: {current_prices[symbol]}")
+def get_moving_average(symbol, short=True):
+    bars_req = StockBarsRequest(symbol_or_symbols=symbol,
+                                timeframe=TimeFrame.Minute,
+                                limit=LONG_MA)
+    bars = data_client.get_stock_bars(bars_req)[symbol]
+    prices = [bar.c for bar in bars]
+
+    if short:
+        ma = sum(prices[-SHORT_MA:]) / SHORT_MA
+    else:
+        ma = sum(prices[-LONG_MA:]) / LONG_MA
+    return ma
+
+def buy_stock(symbol, qty):
+    order = MarketOrderRequest(
+        symbol=symbol,
+        qty=qty,
+        side=OrderSide.BUY,
+        time_in_force=TimeInForce.DAY
+    )
+    trading_client.submit_order(order)
+    print(f"BUY: {qty} shares of {symbol}")
+
+def sell_stock(symbol, qty):
+    order = MarketOrderRequest(
+        symbol=symbol,
+        qty=qty,
+        side=OrderSide.SELL,
+        time_in_force=TimeInForce.DAY
+    )
+    trading_client.submit_order(order)
+    print(f"SELL: {qty} shares of {symbol}")
 
 # =====================
-# GET ALL POSITIONS
+# MAIN LOGIC
 # =====================
 positions = trading_client.get_all_positions()
 positions_dict = {p.symbol: p for p in positions}
 
-# =====================
-# LOOP OVER EACH STOCK
-# =====================
 for symbol in STOCKS:
-    current_price = current_prices[symbol]
+    short_ma = get_moving_average(symbol, short=True)
+    long_ma = get_moving_average(symbol, short=False)
+    print(f"{symbol} - Short MA: {short_ma}, Long MA: {long_ma}")
+
     position = positions_dict.get(symbol)
+    qty_held = int(position.qty) if position else 0
+    avg_price = float(position.avg_entry_price) if position else 0
 
-    if position:  # Already own shares
-        qty = int(position.qty)
-        avg_entry = float(position.avg_entry_price)
-        stop_price = avg_entry * (1 - STOP_LOSS_PCT)
-        take_profit_price = avg_entry * (1 + TAKE_PROFIT_PCT)
+    # Fetch latest price for stop-loss / take-profit
+    bars_req = StockBarsRequest(symbol_or_symbols=symbol, timeframe=TimeFrame.Minute, limit=1)
+    latest_price = data_client.get_stock_bars(bars_req)[symbol][-1].c
 
-        print(f"\nPosition: {symbol}, Qty: {qty}, Avg entry: {avg_entry}")
-        print(f"Stop loss at: {stop_price}, Take profit at: {take_profit_price}")
+    # ========= IDEA 5 LOGIC =========
+    # 1) Buy signal: short MA crosses above long MA
+    if short_ma > long_ma and qty_held < MAX_SHARES:
+        qty_to_buy = min(BUY_AMOUNT, MAX_SHARES - qty_held)
+        buy_stock(symbol, qty_to_buy)
 
-        if current_price <= stop_price:
-            print(f"STOP LOSS HIT for {symbol} — SELLING")
-            order = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=OrderSide.SELL,
-                time_in_force=TimeInForce.DAY
-            )
-            trading_client.submit_order(order)
-            print("Sell order submitted")
+    # 2) Sell signal: short MA crosses below long MA OR stop-loss / take-profit triggers
+    elif qty_held > 0:
+        stop_price = avg_price * (1 - STOP_LOSS_PCT)
+        take_profit_price = avg_price * (1 + TAKE_PROFIT_PCT)
 
-        elif current_price >= take_profit_price:
-            print(f"TAKE PROFIT HIT for {symbol} — SELLING")
-            order = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=OrderSide.SELL,
-                time_in_force=TimeInForce.DAY
-            )
-            trading_client.submit_order(order)
-            print("Sell order submitted")
-
+        if short_ma < long_ma:
+            sell_stock(symbol, qty_held)
+        elif latest_price <= stop_price:
+            print(f"STOP LOSS triggered for {symbol}")
+            sell_stock(symbol, qty_held)
+        elif latest_price >= take_profit_price:
+            print(f"TAKE PROFIT triggered for {symbol}")
+            sell_stock(symbol, qty_held)
         else:
-            print(f"HOLD {symbol} — current price: {current_price}, shares held: {qty}")
+            print(f"HOLD {symbol}: {qty_held} shares, price: {latest_price}")
 
-    else:  # No position yet → buy up to BUY_AMOUNT
-        qty_to_buy = min(BUY_AMOUNT, MAX_SHARES)
-        print(f"\nNo position for {symbol}. Buying {qty_to_buy} shares")
-        order = MarketOrderRequest(
-            symbol=symbol,
-            qty=qty_to_buy,
-            side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY
-        )
-        trading_client.submit_order(order)
-        print(f"Buy order submitted for {symbol}")
-
-print("\nStock Bot run complete.")
+print("Stock Bot run complete.")
