@@ -1,20 +1,19 @@
-name: Run Stock Bot Every 30 Minutes
+name: Run Stock Bot
 
 on:
   schedule:
-    # Every 30 minutes during market hours (CST 9:30-16:00 → UTC 14:30-21:00)
-    - cron: '30 14-20/1 * * 1-5'   # Runs at HH:30 UTC from 14:30 to 20:30 UTC, Mon-Fri
-    - cron: '00 15-20/1 * * 1-5'   # Runs at HH:00 UTC from 15:00 to 20:00 UTC, Mon-Fri
-  workflow_dispatch:               # manual run if needed
+    - cron: '*/30 14-20 * * 1-5'   # Every 30 mins during US market hours (UTC)
+  workflow_dispatch:
 
 jobs:
   run-stock-bot:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'

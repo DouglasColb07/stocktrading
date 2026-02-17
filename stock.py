@@ -13,13 +13,12 @@ STOCKS = ["NVDA", "GOOGL", "AAPL", "COST"]
 MAX_SHARES = 100
 BUY_AMOUNT = 100
 STOP_LOSS_PCT = 0.07
-TAKE_PROFIT_PCT = 0.10
 SHORT_MA = 5
 LONG_MA = 20
 PAPER = True
 
 # =====================
-# LOAD SECRETS
+# LOAD API KEYS FROM GITHUB SECRETS
 # =====================
 API_KEY = os.getenv("ALPACA_API_KEY")
 API_SECRET = os.getenv("ALPACA_SECRET_KEY")
@@ -28,24 +27,37 @@ if not API_KEY or not API_SECRET:
     raise ValueError("ALPACA_API_KEY or ALPACA_SECRET_KEY not set!")
 
 # =====================
-# CLIENTS
+# CREATE CLIENTS
 # =====================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=PAPER)
 data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 # =====================
-# HELPER FUNCTIONS
+# GET MOVING AVERAGE
 # =====================
-def get_moving_average(symbol, short=True):
+def get_moving_averages(symbol):
     bars_req = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=TimeFrame.Minute,
         limit=LONG_MA
     )
-    bars = data_client.get_stock_bars(bars_req)[symbol]
-    prices = [bar.c for bar in bars]
-    return sum(prices[-SHORT_MA:]) / SHORT_MA if short else sum(prices[-LONG_MA:]) / LONG_MA
 
+    bars = data_client.get_stock_bars(bars_req).data[symbol]
+
+    if len(bars) < LONG_MA:
+        return None, None
+
+    prices = [bar.close for bar in bars]  # FIXED (.close instead of .c)
+
+    short_ma = sum(prices[-SHORT_MA:]) / SHORT_MA
+    long_ma = sum(prices[-LONG_MA:]) / LONG_MA
+
+    return short_ma, long_ma
+
+
+# =====================
+# BUY FUNCTION
+# =====================
 def buy_stock(symbol, qty):
     order = MarketOrderRequest(
         symbol=symbol,
@@ -54,8 +66,12 @@ def buy_stock(symbol, qty):
         time_in_force=TimeInForce.DAY
     )
     trading_client.submit_order(order)
-    print(f"BUY: {qty} shares of {symbol}")
+    print(f"BUY {qty} shares of {symbol}")
 
+
+# =====================
+# SELL FUNCTION
+# =====================
 def sell_stock(symbol, qty):
     order = MarketOrderRequest(
         symbol=symbol,
@@ -64,47 +80,66 @@ def sell_stock(symbol, qty):
         time_in_force=TimeInForce.DAY
     )
     trading_client.submit_order(order)
-    print(f"SELL: {qty} shares of {symbol}")
+    print(f"SELL {qty} shares of {symbol}")
+
 
 # =====================
 # MAIN BOT LOGIC
 # =====================
+print("Starting 30-min trading bot...")
+
 positions = trading_client.get_all_positions()
 positions_dict = {p.symbol: p for p in positions}
 
 for symbol in STOCKS:
-    short_ma = get_moving_average(symbol, short=True)
-    long_ma = get_moving_average(symbol, short=False)
-    print(f"{symbol} - Short MA: {short_ma}, Long MA: {long_ma}")
+    print(f"\nChecking {symbol}")
+
+    short_ma, long_ma = get_moving_averages(symbol)
+
+    if short_ma is None:
+        print("Not enough data yet.")
+        continue
+
+    print(f"Short MA: {short_ma}")
+    print(f"Long MA: {long_ma}")
 
     position = positions_dict.get(symbol)
     qty_held = int(position.qty) if position else 0
     avg_price = float(position.avg_entry_price) if position else 0
 
-    # Latest price for stop-loss / take-profit
-    bars_req = StockBarsRequest(symbol_or_symbols=symbol, timeframe=TimeFrame.Minute, limit=1)
-    latest_price = data_client.get_stock_bars(bars_req)[symbol][-1].c
+    # Get latest price
+    bars_req = StockBarsRequest(
+        symbol_or_symbols=symbol,
+        timeframe=TimeFrame.Minute,
+        limit=1
+    )
 
-    # ========= IDEA 5 LOGIC =========
-    # Buy if short MA crosses above long MA
+    latest_bar = data_client.get_stock_bars(bars_req).data[symbol][0]
+    latest_price = latest_bar.close
+
+    # =====================
+    # BUY SIGNAL
+    # =====================
     if short_ma > long_ma and qty_held < MAX_SHARES:
         qty_to_buy = min(BUY_AMOUNT, MAX_SHARES - qty_held)
         buy_stock(symbol, qty_to_buy)
 
-    # Sell if short MA crosses below long MA or stop-loss / take-profit triggered
+    # =====================
+    # SELL SIGNAL
+    # =====================
     elif qty_held > 0:
+
         stop_price = avg_price * (1 - STOP_LOSS_PCT)
-        take_profit_price = avg_price * (1 + TAKE_PROFIT_PCT)
 
         if short_ma < long_ma:
+            print("MA crossover SELL signal")
             sell_stock(symbol, qty_held)
-        elif latest_price <= stop_price:
-            print(f"STOP LOSS triggered for {symbol}")
-            sell_stock(symbol, qty_held)
-        elif latest_price >= take_profit_price:
-            print(f"TAKE PROFIT triggered for {symbol}")
-            sell_stock(symbol, qty_held)
-        else:
-            print(f"HOLD {symbol}: {qty_held} shares, latest price: {latest_price}")
 
-print("Stock Bot run complete.")
+        elif latest_price <= stop_price:
+            print("STOP LOSS triggered")
+            sell_stock(symbol, qty_held)
+
+        else:
+            print(f"HOLD {symbol} | Shares: {qty_held} | Price: {latest_price}")
+
+print("\nBot run complete.")
